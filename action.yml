@@ -2,28 +2,43 @@
 name: 'Custom GitHub Action'
 description: 'A GitHub Action that takes an input and returns the square of the number'
 inputs:
-  num:
-    description: 'Enter a number'
+  server:
     required: true
-    default: "1"
-outputs:
-  num_squared:
-    description: 'Square of the input'
-    # need to specify the extra `value` field for `composite` actions
-    value: ${{ steps.get-square.outputs.num_squared }}
+    description: "ftp server"
+  username:
+    required: true
+    description: "ftp username"
+  password:
+    required: true
+    description: "ftp password"
+  port:
+    required: false
+    default: 21
+    description: "Server port to connect to (read your web hosts docs)"
+  local-dir:
+    required: false
+    description: "Folder to upload from, must end with trailing slash /"
+  server-dir:
+    required: false
+    description: "Path to upload to on the server. Must end with trailing slash /"
 runs:
   using: 'composite'
   steps:
     - name: Install Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'  
+        python-version: '3.12'  
     - name: Install Dependencies
       run: pip install -r requirements.txt
       shell: bash
     - name: Fetch the number's square
       id: get-square
-      run: python src/get_num_square.py
+      run: python src/main.py
       shell: bash
       env:
-        INPUT_NUM: ${{ inputs.num }}
+        INPUT_SERVER: ${{ inputs.num }}
+        INPUT_USERNAME: ${{ inputs.username }}
+        INPUT_PASSWORD: ${{ inputs.password }}
+        INPUT_PORT: ${{ inputs.port }}
+        INPUT_LOCAL_DIR: ${{ inputs.local-dir }}
+        INPUT_SERVER_DIR: ${{ inputs.server-dir }}
