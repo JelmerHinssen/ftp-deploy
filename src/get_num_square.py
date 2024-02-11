@@ -11,5 +11,6 @@ if num:
 else:
     num = 1
 
-# to set output, print to shell in following syntax
-print(f"::set-output name=num_squared::{num ** 2}")
+
+with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+    f.write(f"num_squared={num ** 2}\n")
