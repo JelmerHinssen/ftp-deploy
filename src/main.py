@@ -19,7 +19,7 @@ def env_int(name: str, default=None) -> int:
 class Arguments:
     server: str = env("INPUT_SERVER")
     username: str = env("INPUT_USERNAME")
-    password: str = env("INPUT_PASSWORD")
+    password: str = field(default=env("INPUT_PASSWORD"), repr=False)
     port: int = env_int("INPUT_PORT", 21)
     local_dir: str = env("INPUT_LOCAL_DIR", "./")
     server_dir: str = env("INPUT_SERVER_DIR", "./")
