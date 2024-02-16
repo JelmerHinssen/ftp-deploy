@@ -32,17 +32,17 @@ runs:
   using: 'composite'
   steps:
     - name: Check directory
-      run:
-        - pwd
-        - ls
+      run: |
+        pwd
+        ls
     - name: Checkout
       uses: actions/checkout@v4
       with:
         path: ${{ inputs.deploy-dir}}
     - name: Check directory
-      run:
-        - pwd
-        - ls
+      run: |
+        pwd
+        ls
     - name: Install Python
       uses: actions/setup-python@v4
       with:
