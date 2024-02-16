@@ -5,7 +5,7 @@ import typing
 import typeguard
 
 
-class EnhancedJSONEncoder(json.JSONEncoder):
+class DataclassJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dc.is_dataclass(o):
             return dc.asdict(

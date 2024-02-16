@@ -1,12 +1,10 @@
 from contextlib import contextmanager
 import dataclasses as dc
 import os
-import ftplib
 import hashlib
 import json
 from entry import *
-import typing
-
+from ftp import FTP, open_ftp
 
 def env(name: str, default=None) -> str:
     val = os.getenv(name, default)
@@ -70,44 +68,9 @@ def create_file_list(dir, exclude=[]) -> dict[str, Entry]:
             result[entry.name] = DirectoryEntry(entry.name, create_file_list(entry.path, exclude))
     return result
 
-def split_path(path: str) -> list[str]:
-    parts: list[str] = []
-    while len(path) > 0:
-        path, tail = os.path.split(path)
-        if len(tail) == 0: break
-        parts.append(tail)
-        print(path, tail)
-    parts.reverse()
-    return parts
-
-@contextmanager
-def cwd_single(ftp: ftplib.FTP, dir: str):
-    ftp.cwd(dir)
-    print(f"cd {dir}")
-    try:
-        yield
-    finally:
-        ftp.cwd("..")
-        print(f"cd ..")
-
-@contextmanager
-def cwd_parts(ftp: ftplib.FTP, parts: list[str]):
-    if len(parts) == 0:
-        yield
-    else:
-        with cwd_single(ftp, parts[0]):
-            with typing.cast(typing.ContextManager, cwd_parts(ftp, parts[1:])):
-                yield
-
-@contextmanager
-def cwd(ftp: ftplib.FTP, dir):
-    parts = split_path(dir)
-    with cwd_parts(ftp, parts):
-        yield
-
-def create_remote_file_list(ftp: ftplib.FTP, exclude=[]) -> dict[str, Entry]:
+def create_remote_file_list(ftp: FTP, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
-    for name, info in ftp.mlsd():
+    for name, info in ftp.ls():
         path = os.path.normpath(os.path.join(ftp.pwd(), name))
         if path in exclude:
             continue
@@ -116,32 +79,19 @@ def create_remote_file_list(ftp: ftplib.FTP, exclude=[]) -> dict[str, Entry]:
             file.modified = info["modify"]
             result[name] = file
         elif info["type"] == "dir":
-            with cwd(ftp, name):
+            with ftp.cwd(name):
                 result[name] = DirectoryEntry(name, create_remote_file_list(ftp, exclude))
     return result
 
-def retrieve_file(ftp: ftplib.FTP, path: str) -> bytes:
-    result = b""
-    def retrieve(data: bytes):
-        nonlocal result
-        result += data
-    path, file = os.path.split(path)
-    with cwd(ftp, path):
-        print(ftp.pwd())
-        ftp.dir()
-        print(f"RETR {file}")
-        ftp.retrbinary(f"RETR {file}", retrieve)
-    return result
-
-def retrieve_remote_file_list(ftp: ftplib.FTP):
+def retrieve_remote_file_list(ftp: FTP):
     try:
-        return json.loads(retrieve_file(ftp, remote_data_file).decode(), cls=EntryJSONDecoder)
+        return json.loads(ftp.retrieve_file(remote_data_file).decode(), cls=EntryJSONDecoder)
     except:
         return {}
 
-with ftplib.FTP(args.server, args.username, args.password, timeout=10) as ftp:
+with open_ftp(args.server, args.username, args.password, timeout=10) as ftp:
     retrieved = retrieve_remote_file_list(ftp)
-    with cwd(ftp, os.path.normpath(args.server_dir)):
+    with ftp.cwd(os.path.normpath(args.server_dir)):
         remote = create_remote_file_list(ftp, [remote_data_file])
 
 local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
@@ -149,7 +99,9 @@ local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
 obj = {"retrieved": retrieved, "remote": remote, "local": local}
 
 with open("files.json", "w") as f:
-    json.dump(obj, f, indent="  ", cls=EnhancedJSONEncoder)
+    json.dump(obj, f, indent="  ", cls=DataclassJSONEncoder)
+with open("objects.txt", "w") as f:
+    f.writelines([repr(retrieved) + "\n", repr(remote) + "\n", repr(local) + "\n"])
 
 
 # def file_diff(a, b):
