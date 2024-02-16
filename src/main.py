@@ -125,7 +125,7 @@ def execute_add(ftp: FTP, to_add: DirectoryContent, path: Path):
                 ftp.upload(entry.name, f)
 
 
-logging.info("")
+logging.info(f"Arguments {repr(args)}")
 
 local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
 parts = split_path(local_data_file)
