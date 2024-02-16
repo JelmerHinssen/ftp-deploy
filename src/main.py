@@ -47,9 +47,9 @@ def sha256(path):
     return result.hexdigest()
 
 
-def filedata(entry: os.DirEntry) -> FileEntry:
+def filedata(entry: os.DirEntry, include_size: bool) -> FileEntry:
     stat = entry.stat()
-    return FileEntry(entry.name, size=stat.st_size, sha256=sha256(entry.path))
+    return FileEntry(entry.name, size=stat.st_size if include_size else -1, sha256=sha256(entry.path))
 
 
 local_dir = os.path.normpath(args.local_dir)
@@ -63,10 +63,10 @@ def create_file_list(dir: Path, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
     for entry in os.scandir(dir):
         path = os.path.normpath(entry.path)
-        if path in exclude:
-            continue
+        # if path in exclude:
+        #     continue
         if entry.is_file():
-            result[entry.name] = filedata(entry)
+            result[entry.name] = filedata(entry, path not in exclude)
         elif entry.is_dir():
             result[entry.name] = DirectoryEntry(
                 entry.name, create_file_list(entry.path, exclude)
@@ -131,13 +131,13 @@ local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
 with open_ftp(args.server, args.username, args.password, timeout=10) as ftp:
     retrieved = retrieve_remote_file_list(ftp)
     with ftp.cwd(os.path.normpath(args.server_dir)):
-        remote = create_remote_file_list(ftp, [remote_data_file])
+        remote = create_remote_file_list(ftp, [])
         merged = merge_entries(remote, retrieved)
         to_remove, to_add = create_update_list(local, merged)
 
         execute_remove(ftp, to_remove)
         execute_add(ftp, to_add, local_dir)
-        updated_remote = create_remote_file_list(ftp, [remote_data_file])
+        updated_remote = create_remote_file_list(ftp, [])
         result = merge_modified(local, updated_remote)
         result_file = json.dumps(result, indent=" ", cls=DataclassJSONEncoder)
         ftp.upload(remote_data_file, io.BytesIO(result_file.encode()))
