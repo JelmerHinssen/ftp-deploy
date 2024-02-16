@@ -4,7 +4,6 @@ import types
 import typing
 import typeguard
 
-
 class DataclassJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if dc.is_dataclass(o):
@@ -68,24 +67,104 @@ class EntryJSONDecoder(json.JSONDecoder):
 @dc.dataclass
 class Entry:
     type: str = dc.field(init=False)
-    changed: str | None = dc.field(default=None, init=False)
+    changed: str | typing.Literal[False] | None = dc.field(default=None, init=False)
     modified: str | None = dc.field(default=None, init=False)
+    name: str
 
+    def changed_from(self, expected: "Entry"):
+        if self.type != expected.type:
+            return f"was_{expected.type}"
+        if (self.modified is not None and expected.modified is not None) and self.modified != expected.modified:
+            return "modified"
+        return False
+
+DirectoryContent = dict[str, Entry]
 
 @dc.dataclass
 class FileEntry(Entry):
-    name: str
     size: int | None = None
     sha256: str | None = None
 
     def __post_init__(self):
         self.type = "file"
 
+    def changed_from(self, expected: "FileEntry"):
+        changed = super().changed_from(expected)
+        if changed: return changed
+        if (self.size is not None and expected.size is not None) and self.size != expected.size:
+            return "modified"
+        if (self.sha256 is not None and expected.sha256 is not None) and self.sha256 != expected.sha256:
+            return "modified"
+        return False
+
 
 @dc.dataclass
 class DirectoryEntry(Entry):
-    name: str
-    content: dict[str, Entry] = dc.field(default_factory=dict)
+    content: DirectoryContent = dc.field(default_factory=dict)
 
     def __post_init__(self):
         self.type = "dir"
+
+    def changed_from(self, expected: "FileEntry"):
+        return super().changed_from(expected)
+
+def merge_entries(actual: DirectoryContent, expected: DirectoryContent) -> DirectoryContent:
+    result: DirectoryContent = {}
+    for entry in actual.values():
+        expected_entry = expected.get(entry.name, None)
+        result_entry = dc.replace(entry)
+        if isinstance(result_entry, FileEntry) and isinstance(expected_entry, FileEntry):
+            result_entry.sha256 = expected_entry.sha256
+        if expected_entry is None:
+            result_entry.changed = "added"
+        else:
+            result_entry.changed = entry.changed_from(expected_entry)
+        expected_content = {} if not isinstance(expected_entry, DirectoryEntry) else expected_entry.content
+        if isinstance(result_entry, DirectoryEntry):
+            result_entry.content = merge_entries(result_entry.content, expected_content)
+        result[entry.name] = result_entry
+
+    return result
+
+
+
+def recursive_change(entry: Entry, changed: str | typing.Literal[False]) -> Entry:
+    if isinstance(entry, DirectoryEntry):
+        changed_entry = dc.replace(entry)
+        changed_entry.content = {}
+        for sub_entry in entry.content.values():
+            changed_entry.content[sub_entry.name] = recursive_change(sub_entry, changed)
+    else:
+        changed_entry = dc.replace(entry)
+    changed_entry.changed = changed
+    return changed_entry
+
+
+def create_update_list(wanted: DirectoryContent, actual: DirectoryContent) -> tuple[DirectoryContent, DirectoryContent]:
+    to_remove = DirectoryContent()
+    to_add = DirectoryContent()
+
+    def with_changed(entry: Entry, changed: str | typing.Literal[False]):
+        entry.changed = changed
+        return entry
+
+    for entry in actual.values():
+        wanted_entry = wanted.get(entry.name, None)
+        if wanted_entry is None or entry.changed or wanted_entry.changed_from(entry):
+            to_remove[entry.name] = recursive_change(entry, "remove")
+
+    for entry in wanted.values():
+        entry_to_add = dc.replace(entry)
+        actual_entry = actual.get(entry.name, None)
+        if actual_entry is None or actual_entry.changed or entry.changed_from(actual_entry):
+            to_add[entry.name] = recursive_change(entry_to_add, "add")
+        elif isinstance(entry, DirectoryEntry):
+            actual_content = {} if not isinstance(actual_entry, DirectoryEntry) else actual_entry.content
+            sub_remove, sub_add = create_update_list(entry.content, actual_content)
+            if len(sub_remove) != 0:
+                to_remove[entry.name] = with_changed(dc.replace(entry_to_add, content=sub_remove), False)
+            if len(sub_add) != 0:
+                to_add[entry.name] = with_changed(dc.replace(entry_to_add, content=sub_add), False)
+        
+
+    return to_remove, to_add
