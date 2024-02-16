@@ -36,8 +36,6 @@ class Arguments:
 
 
 args = Arguments()
-print(f"Action called with {repr(args)}")
-
 BUF_SIZE = 65536
 
 
