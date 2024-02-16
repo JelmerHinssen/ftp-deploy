@@ -6,7 +6,7 @@ import hashlib
 import json
 import logging
 from entry import *
-from ftp import FTP, open_ftp
+from ftp import FTP, open_ftp, split_path
 
 
 def env(name: str, default=None) -> str:
@@ -47,9 +47,9 @@ def sha256(path):
     return result.hexdigest()
 
 
-def filedata(entry: os.DirEntry, include_size: bool) -> FileEntry:
+def filedata(entry: os.DirEntry) -> FileEntry:
     stat = entry.stat()
-    return FileEntry(entry.name, size=stat.st_size if include_size else -1, sha256=sha256(entry.path))
+    return FileEntry(entry.name, size=stat.st_size, sha256=sha256(entry.path))
 
 
 local_dir = os.path.normpath(args.local_dir)
@@ -63,10 +63,10 @@ def create_file_list(dir: Path, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
     for entry in os.scandir(dir):
         path = os.path.normpath(entry.path)
-        # if path in exclude:
-        #     continue
+        if path in exclude:
+            continue
         if entry.is_file():
-            result[entry.name] = filedata(entry, path not in exclude)
+            result[entry.name] = filedata(entry)
         elif entry.is_dir():
             result[entry.name] = DirectoryEntry(
                 entry.name, create_file_list(entry.path, exclude)
@@ -128,16 +128,29 @@ def execute_add(ftp: FTP, to_add: DirectoryContent, path: Path):
 logging.info("")
 
 local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
+parts = split_path(local_data_file)
+dataEntry = FileEntry(parts[-1])
+current = local
+for part in parts[:-1]:
+    if part in local:
+        sub = local[part]
+        if isinstance(sub, DirectoryEntry):
+            current = sub.content
+        else:
+            raise RuntimeError("Illegal location for datafile")
+    else:
+        current[part] = DirectoryEntry(part)
+
 with open_ftp(args.server, args.username, args.password, timeout=10) as ftp:
     retrieved = retrieve_remote_file_list(ftp)
     with ftp.cwd(os.path.normpath(args.server_dir)):
-        remote = create_remote_file_list(ftp, [])
+        remote = create_remote_file_list(ftp, [remote_data_file])
         merged = merge_entries(remote, retrieved)
         to_remove, to_add = create_update_list(local, merged)
 
         execute_remove(ftp, to_remove)
         execute_add(ftp, to_add, local_dir)
-        updated_remote = create_remote_file_list(ftp, [])
+        updated_remote = create_remote_file_list(ftp, [remote_data_file])
         result = merge_modified(local, updated_remote)
         result_file = json.dumps(result, indent=" ", cls=DataclassJSONEncoder)
         ftp.upload(remote_data_file, io.BytesIO(result_file.encode()))
