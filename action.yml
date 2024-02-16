@@ -13,30 +13,38 @@ inputs:
   port:
     required: false
     default: 21
-    description: "Server port to connect to (read your web hosts docs)"
+    description: "Server port to connect to"
   local-dir:
     required: false
-    description: "Folder to upload from, must end with trailing slash /"
+    description: "Folder to upload from."
   server-dir:
     required: false
-    description: "Path to upload to on the server. Must end with trailing slash /"
+    description: "Path to upload to on the server."
   data-file:
     required: false
     description: "Path to the file in which to store file checksums"
     default: deploy-data/files.json
+  deploy-dir:
+    required: false
+    description: "Path in which the deploy script is checked out"
+    default: ftp-deploy
 runs:
   using: 'composite'
   steps:
+    - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: ${{ inputs.deploy-dir}}
     - name: Install Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.12'  
     - name: Install Dependencies
-      run: pip install -r requirements.txt
+      run: pip install -r ${{ inputs.deploy-dir}}/requirements.txt
       shell: bash
     - name: Fetch the number's square
       id: get-square
-      run: python src/main.py
+      run: python ${{ inputs.deploy-dir}}/src/main.py
       shell: bash
       env:
         INPUT_SERVER: ${{ inputs.server }}
