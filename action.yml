@@ -35,6 +35,7 @@ runs:
       run: |
         pwd
         ls
+      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
       with:
@@ -43,6 +44,7 @@ runs:
       run: |
         pwd
         ls
+      shell: bash
     - name: Install Python
       uses: actions/setup-python@v4
       with:
