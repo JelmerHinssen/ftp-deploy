@@ -27,25 +27,41 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Check directory
+      run: |
+        pwd
+        ls
+        echo $ACTION_PATH
+        ls $ACTION_PATH
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
     - name: Check directory
       run: |
         pwd
         ls
+        echo $ACTION_PATH
+        ls $ACTION_PATH
+      env:
+        ACTION_PATH: ${{ github.action_path }}
       shell: bash
     - name: Install Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.12'  
     - name: Install Dependencies
-      run: pip install -r requirements.txt
-      shell: bash
-    - name: Fetch the number's square
-      id: get-square
-      run: python src/main.py
+      run: pip install -r $ACTION_PATH/requirements.txt
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
+    - name: Fetch the number's square
+      id: get-square
+      run: python $ACTION_PATH/src/main.py
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
         INPUT_SERVER: ${{ inputs.server }}
         INPUT_USERNAME: ${{ inputs.username }}
         INPUT_PASSWORD: ${{ inputs.password }}
