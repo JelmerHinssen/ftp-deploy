@@ -1,10 +1,13 @@
 from contextlib import contextmanager
 import dataclasses as dc
+import io
 import os
 import hashlib
 import json
+import logging
 from entry import *
 from ftp import FTP, open_ftp
+
 
 def env(name: str, default=None) -> str:
     val = os.getenv(name, default)
@@ -55,18 +58,23 @@ local_dir = os.path.normpath(args.local_dir)
 local_data_file = os.path.normpath(os.path.join(local_dir, args.data_file))
 remote_data_file = os.path.normpath(os.path.join(args.server_dir, args.data_file))
 
+Path = str
 
-def create_file_list(dir, exclude=[]) -> dict[str, Entry]:
+
+def create_file_list(dir: Path, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
     for entry in os.scandir(dir):
         path = os.path.normpath(entry.path)
         if path in exclude:
             continue
         if entry.is_file():
-            result[entry.name] = (filedata(entry))
+            result[entry.name] = filedata(entry)
         elif entry.is_dir():
-            result[entry.name] = DirectoryEntry(entry.name, create_file_list(entry.path, exclude))
+            result[entry.name] = DirectoryEntry(
+                entry.name, create_file_list(entry.path, exclude)
+            )
     return result
+
 
 def create_remote_file_list(ftp: FTP, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
@@ -80,41 +88,58 @@ def create_remote_file_list(ftp: FTP, exclude=[]) -> dict[str, Entry]:
             result[name] = file
         elif info["type"] == "dir":
             with ftp.cwd(name):
-                result[name] = DirectoryEntry(name, create_remote_file_list(ftp, exclude))
+                result[name] = DirectoryEntry(
+                    name, create_remote_file_list(ftp, exclude)
+                )
     return result
+
 
 def retrieve_remote_file_list(ftp: FTP):
     try:
-        return json.loads(ftp.retrieve_file(remote_data_file).decode(), cls=EntryJSONDecoder)
+        return json.loads(
+            ftp.retrieve_file(remote_data_file).decode(), cls=EntryJSONDecoder
+        )
     except:
         return {}
 
+
+def execute_remove(ftp: FTP, to_remove: DirectoryContent):
+    for entry in to_remove.values():
+        if isinstance(entry, DirectoryEntry):
+            with ftp.cwd(entry.name):
+                execute_remove(ftp, entry.content)
+            if entry.changed == "remove":
+                ftp.rmdir(entry.name)
+        elif entry.changed == "remove":
+            ftp.delete(entry.name)
+
+
+def execute_add(ftp: FTP, to_add: DirectoryContent, path: Path):
+    for entry in to_add.values():
+        entry_path = os.path.normpath(os.path.join(path, entry.name))
+        if isinstance(entry, DirectoryEntry):
+            if entry.changed == "add":
+                ftp.mkdir(entry.name)
+            with ftp.cwd(entry.name):
+                execute_add(ftp, entry.content, entry_path)
+        elif entry.changed == "add":
+            with open(entry_path, "rb") as f:
+                ftp.upload(entry.name, f)
+
+
+logging.info("")
+
+local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
 with open_ftp(args.server, args.username, args.password, timeout=10) as ftp:
     retrieved = retrieve_remote_file_list(ftp)
     with ftp.cwd(os.path.normpath(args.server_dir)):
         remote = create_remote_file_list(ftp, [remote_data_file])
+        merged = merge_entries(remote, retrieved)
+        to_remove, to_add = create_update_list(local, merged)
 
-local = create_file_list(os.path.normpath(args.local_dir), [local_data_file])
-
-obj = {"retrieved": retrieved, "remote": remote, "local": local}
-
-with open("files.json", "w") as f:
-    json.dump(obj, f, indent="  ", cls=DataclassJSONEncoder)
-with open("objects.txt", "w") as f:
-    f.writelines([repr(retrieved) + "\n", repr(remote) + "\n", repr(local) + "\n"])
-
-
-# def file_diff(a, b):
-#     added = {"files": {}, "directories": {}}
-#     removed = {"files": {}, "directories": {}}
-#     updated = {"files": {}, "directories": {}}
-#     for name in a["files"]:
-#         if name not in b["files"]:
-#             added["files"][name] = a["files"][name]
-#         elif True:
-#             pass
-#     for name in a["directories"]:
-#         if name not in b["directories"]:
-#             added["directories"][name] = a["directories"]["name"]
-#         else:
-#             pass
+        execute_remove(ftp, to_remove)
+        execute_add(ftp, to_add, local_dir)
+        updated_remote = create_remote_file_list(ftp, [remote_data_file])
+        result = merge_modified(local, updated_remote)
+        result_file = json.dumps(result, indent=" ", cls=DataclassJSONEncoder)
+        ftp.upload(remote_data_file, io.BytesIO(result_file.encode()))

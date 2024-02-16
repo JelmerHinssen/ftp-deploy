@@ -1,9 +1,12 @@
 from ftplib import FTP as FTPSocket
 from contextlib import contextmanager
+from functools import wraps
 import os
 import typing
+import logging
 
 Path = str
+
 
 def split_path(path: str) -> list[str]:
     parts: list[str] = []
@@ -16,7 +19,23 @@ def split_path(path: str) -> list[str]:
     return parts
 
 
+def with_logger(cls, name="logger"):
+    def fullname(cls):
+        module = cls.__module__
+        if module == "builtins":
+            return cls.__qualname__
+        return module + "." + cls.__qualname__
+
+    logger = logging.getLogger(fullname(cls))
+    logger.setLevel(logging.INFO)
+    setattr(cls, name, logger)
+    return cls
+
+
+@with_logger
 class FTP:
+    logger: logging.Logger
+
     def __init__(self, socket: FTPSocket):
         self.socket = socket
 
@@ -26,19 +45,66 @@ class FTP:
         with self._cwd_parts(parts):
             yield
 
-    def retrieve_file(self, path: Path) -> bytes:
+    @staticmethod
+    def local_cmd(f):
+        @wraps(f)
+        def inner(self: "FTP", path: Path, *args, **kwargs):
+            self.info(f"{f.__name__} '{path}'")
+            path, file = os.path.split(path)
+            with self.cwd(path):
+                return f(self, file, *args, **kwargs)
+
+        return inner
+
+    def info(self, msg):
+        self.logger.info(f"{self.pwd()}> {msg}")
+
+    def dbg(self, msg):
+        self.logger.debug(f"{self.pwd()}> {msg}")
+
+    def warn(self, msg):
+        self.logger.warn(f"{self.pwd()}> {msg}")
+
+    @local_cmd
+    def retrieve_file(self, file: str) -> bytes:
         result = b""
+
         def retrieve(data: bytes):
             nonlocal result
             result += data
-        path, file = os.path.split(path)
-        with self.cwd(path):
-            self.socket.retrbinary(f"RETR {file}", retrieve)
+
+        self.socket.retrbinary(f"RETR {file}", retrieve)
         return result
-    
+
+    @local_cmd
+    def delete(self, file: str):
+        self.socket.delete(file)
+
+    @local_cmd
+    def rmdir(self, file: str):
+        try:
+            self.socket.rmd(file)
+            return True
+        except:
+            self.warn(f"Could not delete directory '{file}'")
+            return False
+
+    @local_cmd
+    def upload(self, file: str, data: typing.BinaryIO):
+        self.socket.storbinary(f"STOR {file}", data)
+
+    @local_cmd
+    def mkdir(self, file: str):
+        try:
+            self.socket.mkd(file)
+            return True
+        except:
+            self.warn(f"Could not create directory '{file}'")
+            return False
+
     def ls(self) -> typing.Iterator[tuple[str, dict[str, str]]]:
         return self.socket.mlsd()
-    
+
     def pwd(self) -> Path:
         return self.socket.pwd()
 

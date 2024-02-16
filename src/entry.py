@@ -165,6 +165,18 @@ def create_update_list(wanted: DirectoryContent, actual: DirectoryContent) -> tu
                 to_remove[entry.name] = with_changed(dc.replace(entry_to_add, content=sub_remove), False)
             if len(sub_add) != 0:
                 to_add[entry.name] = with_changed(dc.replace(entry_to_add, content=sub_add), False)
-        
 
     return to_remove, to_add
+
+def merge_modified(file_list: DirectoryContent, file_dates: DirectoryContent) -> DirectoryContent:
+    result = DirectoryContent()
+    for entry in file_list.values():
+        dated_entry = file_dates.get(entry.name, None)
+        result_entry = dc.replace(entry)
+        dated_content = {} if not isinstance(dated_entry, DirectoryEntry) else dated_entry.content
+        if dated_entry is not None:
+            result_entry.modified = dated_entry.modified
+        if isinstance(result_entry, DirectoryEntry):
+            result_entry.content = merge_modified(result_entry.content, dated_content)
+        result[entry.name] = result_entry
+    return result
