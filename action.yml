@@ -66,6 +66,6 @@ runs:
         INPUT_USERNAME: ${{ inputs.username }}
         INPUT_PASSWORD: ${{ inputs.password }}
         INPUT_PORT: ${{ inputs.port }}
-        INPUT_LOCAL_DIR: ${{ github.action_path }}/${{ inputs.local-dir }}
+        INPUT_LOCAL_DIR: ${{ inputs.local-dir }}
         INPUT_SERVER_DIR: ${{ inputs.server-dir }}
         INPUT_DATA_FILE: ${{ inputs.data-file }}
