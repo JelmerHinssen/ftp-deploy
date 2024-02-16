@@ -20,6 +20,10 @@ inputs:
   server-dir:
     required: false
     description: "Path to upload to on the server. Must end with trailing slash /"
+  data-file:
+    required: false
+    description: "Path to the file in which to store file checksums"
+    default: deploy-data/files.json
 runs:
   using: 'composite'
   steps:
@@ -41,3 +45,4 @@ runs:
         INPUT_PORT: ${{ inputs.port }}
         INPUT_LOCAL_DIR: ${{ inputs.local-dir }}
         INPUT_SERVER_DIR: ${{ inputs.server-dir }}
+        INPUT_DATA_FILE: ${{ inputs.data-file }}
