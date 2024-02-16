@@ -144,13 +144,13 @@ for part in parts[:-1]:
 with open_ftp(args.server, args.username, args.password, timeout=10) as ftp:
     retrieved = retrieve_remote_file_list(ftp)
     with ftp.cwd(os.path.normpath(args.server_dir)):
-        remote = create_remote_file_list(ftp, [remote_data_file])
+        remote = create_remote_file_list(ftp, [])
         merged = merge_entries(remote, retrieved)
         to_remove, to_add = create_update_list(local, merged)
 
         execute_remove(ftp, to_remove)
         execute_add(ftp, to_add, local_dir)
-        updated_remote = create_remote_file_list(ftp, [remote_data_file])
+        updated_remote = create_remote_file_list(ftp, [])
         result = merge_modified(local, updated_remote)
         result_file = json.dumps(result, indent=" ", cls=DataclassJSONEncoder)
         ftp.upload(remote_data_file, io.BytesIO(result_file.encode()))
