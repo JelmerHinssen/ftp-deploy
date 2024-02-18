@@ -24,37 +24,44 @@ inputs:
     required: false
     description: "Path to the file in which to store file checksums"
     default: deploy-data/files.json
-  deploy-dir:
-    required: false
-    description: "Path in which the deploy script is checked out"
-    default: ftp-deploy
 runs:
   using: 'composite'
   steps:
     - name: Check directory
-      run:
-        - pwd
-        - ls
+      run: |
+        pwd
+        ls
+        echo $ACTION_PATH
+        ls $ACTION_PATH
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      shell: bash
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        path: ${{ inputs.deploy-dir}}
     - name: Check directory
-      run:
-        - pwd
-        - ls
+      run: |
+        pwd
+        ls
+        echo $ACTION_PATH
+        ls $ACTION_PATH
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      shell: bash
     - name: Install Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.12'  
     - name: Install Dependencies
-      run: pip install -r ${{ inputs.deploy-dir}}/requirements.txt
-      shell: bash
-    - name: Fetch the number's square
-      id: get-square
-      run: python ${{ inputs.deploy-dir}}/src/main.py
+      run: pip install -r $ACTION_PATH/requirements.txt
       shell: bash
       env:
+        ACTION_PATH: ${{ github.action_path }}
+    - name: Fetch the number's square
+      id: get-square
+      run: python $ACTION_PATH/src/main.py
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
         INPUT_SERVER: ${{ inputs.server }}
         INPUT_USERNAME: ${{ inputs.username }}
         INPUT_PASSWORD: ${{ inputs.password }}

@@ -40,9 +40,9 @@ class FTP:
         self.socket = socket
 
     @contextmanager
-    def cwd(self, dir: Path):
+    def cwd(self, dir: Path, make_dir: bool = False):
         parts = split_path(dir)
-        with self._cwd_parts(parts):
+        with self._cwd_parts(parts, make_dir):
             yield
 
     @staticmethod
@@ -89,9 +89,11 @@ class FTP:
             self.warn(f"Could not delete directory '{file}'")
             return False
 
-    @local_cmd
-    def upload(self, file: str, data: typing.BinaryIO):
-        self.socket.storbinary(f"STOR {file}", data)
+    def upload(self, path: Path, data: typing.BinaryIO):
+        self.info(f"upload '{path}'")
+        path, file = os.path.split(path)
+        with self.cwd(path, True):
+            self.socket.storbinary(f"STOR {file}", data)
 
     @local_cmd
     def mkdir(self, file: str):
@@ -108,8 +110,16 @@ class FTP:
     def pwd(self) -> Path:
         return self.socket.pwd()
 
+    def exists(self, path: Path):
+        try:
+            return len(list(self.socket.mlsd(path))) > 0
+        except:
+            return False
+
     @contextmanager
-    def _cwd_single(self, dir: str):
+    def _cwd_single(self, dir: str, make_dir: bool):
+        if make_dir and not self.exists(dir):
+            self.mkdir(dir)
         self.socket.cwd(dir)
         try:
             yield
@@ -117,12 +127,12 @@ class FTP:
             self.socket.cwd("..")
 
     @contextmanager
-    def _cwd_parts(self, parts: list[str]):
+    def _cwd_parts(self, parts: list[str], make_dir: bool):
         if len(parts) == 0:
             yield
         else:
-            with self._cwd_single(parts[0]):
-                with typing.cast(typing.ContextManager, self._cwd_parts(parts[1:])):
+            with self._cwd_single(parts[0], make_dir):
+                with typing.cast(typing.ContextManager, self._cwd_parts(parts[1:], make_dir)):
                     yield
 
 
