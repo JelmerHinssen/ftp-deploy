@@ -61,6 +61,7 @@ Path = str
 
 def create_file_list(dir: Path, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
+    print(f"current content: {[e.name for e in os.scandir()]}")
     print(f"scanning {dir} in {os.getcwd()}")
     for entry in os.scandir(dir):
         path = os.path.normpath(entry.path)
