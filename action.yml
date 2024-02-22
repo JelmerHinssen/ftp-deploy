@@ -27,42 +27,17 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Check directory
-      run: |
-        pwd
-        ls
-        echo $ACTION_PATH
-        ls $ACTION_PATH
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-      shell: bash
-    - name: Check directory
-      run: |
-        pwd
-        ls
-        echo $ACTION_PATH
-        ls $ACTION_PATH
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-      shell: bash
     - name: Install Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.12'  
+
     - name: Install Dependencies
       run: pip install -r $ACTION_PATH/requirements.txt
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-    - name: Check directory
-      run: |
-        pwd
-        ls
-        echo $ACTION_PATH
-        ls $ACTION_PATH
-      env:
-        ACTION_PATH: ${{ github.action_path }}
-      shell: bash
+
     - name: Copy files to server
       id: get-square
       run: python $ACTION_PATH/src/main.py

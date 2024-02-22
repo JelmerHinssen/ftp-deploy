@@ -61,9 +61,13 @@ Path = str
 
 def create_file_list(dir: Path, exclude=[]) -> dict[str, Entry]:
     result: dict[str, Entry] = {}
-    print(f"current content: {[e.name for e in os.scandir()]}")
-    print(f"scanning {dir} in {os.getcwd()}")
-    for entry in os.scandir(dir):
+    try:
+        scan_result = os.scandir(dir)
+    except FileNotFoundError:
+        print(f"Warning: directory {dir} was not found")
+        return result
+
+    for entry in scan_result:
         path = os.path.normpath(entry.path)
         if path in exclude:
             continue
