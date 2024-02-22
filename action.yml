@@ -56,7 +56,16 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-    - name: Fetch the number's square
+    - name: Check directory
+      run: |
+        pwd
+        ls
+        echo $ACTION_PATH
+        ls $ACTION_PATH
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      shell: bash
+    - name: Copy files to server
       id: get-square
       run: python $ACTION_PATH/src/main.py
       shell: bash
