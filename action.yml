@@ -36,8 +36,6 @@ runs:
       env:
         ACTION_PATH: ${{ github.action_path }}
       shell: bash
-    - name: Checkout
-      uses: actions/checkout@v4
     - name: Check directory
       run: |
         pwd
